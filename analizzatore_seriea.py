@@ -64,13 +64,20 @@ ODDS_COLS = {
 
 
 # ---------------------------------------------------------------- dati
+def read_csv_clean(src):
+    """Legge un CSV di football-data togliendo il BOM dai nomi colonna e righe/colonne vuote."""
+    d = pd.read_csv(src, encoding="latin-1")
+    d.columns = [re.sub(r"^(\u00ef\u00bb\u00bf|\ufeff)", "", str(c)).strip() for c in d.columns]
+    return d.dropna(how="all")
+
+
 def load_history(csv_dir=None, divs=None):
     frames = []
     for div in (divs or list(LEAGUES)):
         for se in SEASONS:
             src = os.path.join(csv_dir, f"{div}_{se}.csv") if csv_dir else f"{BASE}/mmz4281/{se}/{div}.csv"
             try:
-                d = pd.read_csv(src, encoding="latin-1")
+                d = read_csv_clean(src)
                 d = d.reindex(columns=["Date", "HomeTeam", "AwayTeam", "Referee"] + RAW_COLS)
                 d["Div"] = div
                 frames.append(d)
@@ -90,7 +97,9 @@ def load_history(csv_dir=None, divs=None):
 
 def load_fixtures(path=None, div="I1"):
     """Prossima giornata del campionato: partite entro 3 giorni dalla prima in programma."""
-    fx = pd.read_csv(path or f"{BASE}/fixtures.csv", encoding="latin-1")
+    fx = read_csv_clean(path or f"{BASE}/fixtures.csv")
+    if "Div" not in fx.columns:
+        raise RuntimeError(f"File calendario non valido: colonne trovate {list(fx.columns)[:8]}")
     fx = fx[fx["Div"] == div].copy()
     fx["Date"] = pd.to_datetime(fx["Date"], dayfirst=True, format="mixed", errors="coerce")
     fx = fx[fx["Date"] >= pd.Timestamp.today().normalize()].sort_values("Date")
